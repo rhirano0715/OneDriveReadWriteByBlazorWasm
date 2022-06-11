@@ -1,0 +1,97 @@
+﻿@page "/GraphExample"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.Graph
+@using System.IO
+@using System.Text
+@attribute [Authorize]
+@inject GraphServiceClient GraphClient
+
+<h3>Graph Client Example</h3>
+
+<h4>User infomation</h4>
+
+@if (user != null)
+{
+    <p>DisplayName: @user.DisplayName</p>
+    <p>UserPrincipalName: @user.UserPrincipalName</p>
+}
+
+<h4>Onedrive root items</h4>
+
+@if (rootChildren != null)
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var rootChild in rootChildren)
+            {
+                <tr>
+                    <td>@rootChild.Name</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<h4>uploaded_by_graph_example</h4>
+@if (lines != null)
+{
+    @foreach(var line in lines)
+    {
+        <p>@line</p>
+    }
+}
+
+
+@code {
+    private User? user;
+    private IDriveItemChildrenCollectionPage? rootChildren;
+    private List<string>? lines;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await this.InitializeUser();
+
+        await this.PutFileToOneDrive();
+
+        await this.InitializeItemList();
+
+        await this.ReadTextFromOneDrive();
+    }
+
+    private async Task InitializeUser()
+    {
+        var request = GraphClient.Me.Request();
+        user = await request.GetAsync();
+    }
+
+    private async Task PutFileToOneDrive()
+    {
+        await GraphClient.Me.Drive.Root
+            .ItemWithPath("uploaded_by_graph_example.txt").Content
+            .Request()
+            .PutAsync<DriveItem>(new MemoryStream(Encoding.GetEncoding("UTF-8").GetBytes("line1\nline2\n行3\n")));
+    }
+
+    private async Task InitializeItemList()
+    {
+        rootChildren = await GraphClient.Me.Drive.Root.Children.Request().GetAsync();
+    }
+
+    private async Task ReadTextFromOneDrive()
+    {
+        var stream = await GraphClient.Me.Drive.Root
+            .ItemWithPath("uploaded_by_graph_example.txt").Content
+            .Request()
+            .GetAsync();
+
+        var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+        var text = Encoding.GetEncoding("UTF-8").GetString(ms.ToArray());
+        lines = text.Split('\n').ToList();
+    }
+}
